@@ -1,0 +1,359 @@
+<html>
+<head>
+	<title>JAXWS</title>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+	<style>
+		.TODO{
+			padding: 10px;
+			background-color: #ffaa00;
+		}
+		code.block{
+			white-space: pre;
+		}
+	</style>
+</head>
+<body>
+	<h1>Introduction</h1>
+
+	<p>
+		L'objectif de cette série de billets est d'éclaircir la mise en place d'un service web avec les dernières technologies mises à disposition des développeurs : JAXWS, Spring, Maven, ...
+	</p>
+	<p>
+		Nous commencerons par le développement de la partie serveur (part 1) pour exposer de la logique métier à travers un WSDL.
+		Nous verrons ensuite comment mettre en place un client à partir du WSDL (part 2).
+		Finalement, nous partiront du postulat que nous avons la main à la fois sur le serveur et le client pour simplifier l'exemple 2 (part 3).
+		La gestion des dépendances se fera avec maven, chaque partie contiendra une sous-partie sur cet outil de construction.
+	</p>
+	<p>
+		Le code ayant été réduit au maximum dans ce billet, des liens sur le svn sont disponibles pour visualiser le code réel.
+	</p>
+	<p>
+		La question des tests unitaires ne sera pas abordée dans cette série de billets.
+	</p>
+	
+	<h1>Lexique</h1>
+
+	<ul>
+		<li><a href="http://fr.wikipedia.org/wiki/Web_Services_Description_Language">WSDL</a></li>
+		<li><a href="https://jax-ws.dev.java.net/">JAXWS</a></li>
+		<li><a href="http://www.springsource.org/">Spring</a></li>
+		<li><a href="http://maven.apache.org/">Maven</a></li>
+		<li><a href="http://jetty.codehaus.org/jetty/">Jetty</a></li>
+	</ul>
+	
+	<h1>Part 1 : Serveur</h1>
+	
+	<h2>Architecture macro</h2>
+
+	<div class="TODO">
+		webapp -] web service -] logic (schéma)
+	</div>
+	On découpe donc notre application serveur en 4 modules :
+	<ol>
+		<li>jaxws-server-logic : la logique métier, dans notre cas un simple "hello world" mais on imagine très bien un éventuel accès à des DAO, des appels à d'autres services web, ... Pour résumé, le module "logic" est le point d'entrée au métier de l'application.</li>
+		<li>jaxws-server-jaxws-server-wsserver-interface : l'interface du service web, couche définissant la structure du service web.</li>
+		<li>jaxws-server-jaxws-server-wsserver : le service web, couche qui expose la logique métier à l'extérieur. Ce service va définir le WSDL qui permettra d'accéder au métier.</li>
+		<li>jaxws-server-webapp : l'application web qui hébergera notre service web, nous pourrons alors testé l'accès au WSDL.</li>
+	</ol>
+	Pour mutualiser la gestion des dépendances, un module parent est défini : jaxws-server
+	
+	<h2>Module parent</h2>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/pom.xml">POM parent (server)</a>
+	</p>
+	<p>
+		Définition des 4 modules :  <code>&lt;modules /&gt</code>;
+		<br />
+		Filtrage des ressources sur les fichiers xml et properties : <code>&lt;resources /&gt;</code>
+		<br />
+		Compilation en java 6, fichiers java UTF-8, fichiers de propriétés en ISO-8859-1 (nécessaire pour les fichiers de localisation) : <code>&lt;plugins /&gt;</code>
+		<br />
+		Définition des dépendances et exclusions éventuelles : <code>&lt;dependencyManagement /&gt;</code>
+		<br />
+		Liste des développeurs : <code>&lt;developers /&gt;</code>
+		<br />
+		Liste des dépôt nécessaires, autre que central : <code>&lt;repositories /&gt;</code>
+		<br />
+		Information concernant le gestionnaire de sources : <code>&lt;scm /&gt;</code>
+	</p>
+	<table>
+		<caption>Détail des artefacts utilisés</caption>
+		<thead>
+			<tr>
+				<th>groupId</th>
+				<th>artifactId</th>
+				<th>version</th>
+				<th>scope</th>
+				<th>exclusions</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td>info.astik.example</td>
+				<td>jaxws-server-logic</td>
+				<td>${project.version}</td>
+				<td>compile</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>info.astik.example</td>
+				<td>jaxws-server-wsserver</td>
+				<td>${project.version}</td>
+				<td>compile</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>info.astik.example</td>
+				<td>jaxws-server-wsserver-interface</td>
+				<td>${project.version}</td>
+				<td>compile</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>commons-lang</td>
+				<td>commons-lang</td>
+				<td>2.5</td>
+				<td>compile</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>org.jvnet.jax-ws-commons.spring</td>
+				<td>jaxws-spring</td>
+				<td>1.8</td>
+				<td>compile</td>
+				<td>
+					com.sun.xml.stream.buffer:streambuffer
+					<br />
+					org.jvnet.staxex:stax-ex
+					<br />
+					org.springframework:spring
+				</td>
+			</tr>
+			<tr>
+				<td>com.sun.istack</td>
+				<td>istack-commons-runtime</td>
+				<td>2.2</td>
+				<td>runtime</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>com.sun.xml.ws</td>
+				<td>jaxws-rt</td>
+				<td>2.2</td>
+				<td>runtime</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>org.springframework</td>
+				<td>spring-context</td>
+				<td>3.0.2.RELEASE</td>
+				<td>runtime</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>org.springframework</td>
+				<td>spring-core</td>
+				<td>3.0.2.RELEASE</td>
+				<td>runtime</td>
+				<td></td>
+			</tr>
+			<tr>
+				<td>org.springframework</td>
+				<td>spring-web</td>
+				<td>3.0.2.RELEASE</td>
+				<td>runtime</td>
+				<td></td>
+			</tr>
+		</tbody>
+	</table>
+
+	<h2>Module : logique (jaxws-server-logic)</h2>
+
+	<h3>POM</h3>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-logic/pom.xml">POM logic (server)</a>
+		<br />
+		Il n'y a rien de particulier dans ce module. La dépendance présente ne l'est que pour l'exemple, elle n'est pas obligatoire.
+		<br />
+		Ce module est un JAR.
+	</p>
+	
+	<h3>Java</h3>
+	<p>
+		Nous créons un package pour notre logic métier <code>info.astik.example.jaxws.server.logic</code>.
+		<br />
+		Nous définissons une interface du métier : <a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-logic/src/main/java/info/astik/example/jaxws/server/logic/IExampleLogic.java">IExampleLogic</a> et son implémentation : <a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-logic/src/main/java/info/astik/example/jaxws/server/logic/ExampleLogicImpl.java">ExampleLogicImpl</a>
+		<br />
+		Le métier se résume pour ce tutoriel à une simple méthode : <code>String getHelloMessage(String input);</code>
+	</p>
+
+	<h2>Module : interface du service web (jaxws-server-wsserver-interface)</h2>
+
+	<h3>POM</h3>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-wsserver-interface/pom.xml">POM WS server interface (server)</a>
+		<br />
+		Il n'y a rien de particulier dans ce module.
+		<br />
+		Ce module est un JAR.
+	</p>
+
+	<h3>Java</h3>
+	<p>
+		On définit l'interface <a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-wsserver-interface/src/main/java/info/astik/example/jaxws/server/IExampleWS.java">IExampleWS</a> qui représente le métier exposé par le service web.
+	</p>
+	<code class="block">
+		@WebService(serviceName = "example", portName = "examplePort")
+		public interface IExampleWS {
+			@WebMethod
+			public String getHelloMessage(String input);
+		}
+	</code>
+	<p>
+		On identifie les méthodes exposées par l'annotation <code>@WebMethod</code>.
+		<br />
+		L'annotation <code>@WebService</code> permet de définir les informations du WSDL (nom du service, nom du port, ...).
+	</p>
+
+	<h2>Module : service web (jaxws-server-wsserver)</h2>
+
+	<h3>POM</h3>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-wsserver/pom.xml">POM WS server (server)</a>
+		<br />
+		Il n'y a rien de particulier dans ce module. On retrouve juste les dépendances vers le module "jaxws-server-logic" et le module "jaxws-server-wsserver-interface"
+		<br />
+		Ce module est un JAR.
+	</p>
+
+	<h3>Java</h3>
+	<p>
+		On définit la classe <a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-wsserver/src/main/java/info/astik/example/jaxws/server/ExampleWS.java">ExampleWS</a> qui représente le métier exposé par le service web.
+	</p>
+	<code class="block">
+		@WebService(serviceName = "example", portName = "examplePort")
+		public class ExampleWS implements IExampleWS {
+			private IExampleLogic iExampleLogic;
+		
+			@WebMethod
+			@Override
+			public String getHelloMessage(String input) {
+				return iExampleLogic.getHelloMessage(input);
+			}
+		
+			/* GETTER AND SETTER */
+			@WebMethod(exclude = true)
+			public void setiExampleLogic(IExampleLogic iExampleLogic) {
+				this.iExampleLogic = iExampleLogic;
+			}
+		}
+	</code>
+	<p>
+		De la même façon que précédemment avec l'interface, on identifie les méthodes exposées par l'annotation <code>@WebMethod</code>.
+		<br />
+		L'annotation <code>@WebService</code> permet de définir les informations du WSDL (nom du service, nom du port, ...).
+		<br />
+		On retrouve l'interface du code métier iExampleLogic et son modificateur associé, utile pour l'injection avec spring.
+	</p>
+
+	<h2>Module : application web (jaxws-server-webapp)</h2>
+
+	<h3>POM</h3>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/pom.xml">POM webapp (server)</a>
+		<br />
+		Ce module est un WAR. C'est cette application qui portera le service web.
+		<br />
+		Pour exécuter notre application, nous utiliserons le serveur Jetty qui sera disponible sur le port 8080 : <code>&lt;build&gt;</code>.
+		<br />
+		En dépendance, on retrouve notre module "jaxws-server-wsserver".
+		<br />
+		C'est dans ce module que nous initialisons le framework spring et que nous faisons la déclaration du service web. Nous indiquons donc les dépendances vers les artefacts nécessaires : "jaxws-spring" et "spring-web".
+	</p>
+
+	<h3>Configuration de l'application</h3>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-webapp/src/main/webapp/WEB-INF/web.xml">web.xml</a>
+	</p>
+	<p>
+		On retrouve dans ce fichier l'initialisation habituelle de Spring :
+	</p>
+	<code class="block">
+		&lt;context-param&gt;
+			&lt;param-name&gt;contextConfigLocation&lt;/param-name&gt;
+			&lt;param-value&gt;classpath:applicationContext.xml&lt;/param-value&gt;
+		&lt;/context-param&gt;
+		...
+		&lt;listener&gt;
+			&lt;listener-class&gt;org.springframework.web.context.ContextLoaderListener&lt;/listener-class&gt;
+		&lt;/listener&gt;
+	</code>
+	<p>
+		On retrouve aussi l'initialisation de jaxws-spring :
+	</p>
+	<code class="block">
+		&lt;servlet&gt;
+			&lt;servlet-name&gt;jaxws-servlet&lt;/servlet-name&gt;
+			&lt;servlet-class&gt;com.sun.xml.ws.transport.http.servlet.WSSpringServlet&lt;/servlet-class&gt;
+			&lt;load-on-startup&gt;1&lt;/load-on-startup&gt;
+		&lt;/servlet&gt;
+		&lt;servlet-mapping&gt;
+			&lt;servlet-name&gt;jaxws-servlet&lt;/servlet-name&gt;
+			&lt;url-pattern&gt;/services/*&lt;/url-pattern&gt;
+		&lt;/servlet-mapping&gt;
+	</code>
+	<p>
+		Avec cette configuration, toutes les URL pointant vers /services/* seront traitées par jaxws-spring.
+	</p>
+
+	<h3>Configuration Spring</h3>
+	<p>
+		La configuration de spring est pilotée par le fichier <a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-webapp/src/main/resources/applicationContext.xml">applicationContext.xml</a> (déclaré ainsi dans le web.xml dans l'étape précédente).
+		Ce fichier se limite à faire l'inclusion de la totalité des fichiers de configuration spring.
+	</p>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-webapp/src/main/resources/applicationContext-logic.xml">applicationContext-logic.xml</a>
+		<br />
+		Ce fichier contient la déclaration des beans de la partie métier. Encore une fois, dans ce tutoriel, nous faisons simple. On pourrait très bien imaginer une application plus complexe avec plus de beans et éventuellement un découpage de la configuration plus fin (dao, service,, utils, ...).
+	</p>
+	<p>
+		<a href="https://astiktutorial.googlecode.com/svn/trunk/example_jaxws/jaxws-server/jaxws-server-webapp/src/main/resources/applicationContext-ws.xml">applicationContext-ws.xml</a>
+		<br />
+		On retrouve dans ce fichier la définition des correspondances entre les URL et le bean en charge du service web. 
+		<code class="block">
+			&lt;wss:binding url="/services/example"&gt;
+				&lt;wss:service&gt;
+					&lt;ws:service bean="#exampleWs" /&gt;
+				&lt;/wss:service&gt;
+			&lt;/wss:binding&gt;
+		</code>
+		<br />
+		Ici l'URL /services/example sera géré par le bean exampleWs qui est définit ensuite
+		<br />
+		<code class="block">
+			&lt;bean id="exampleWs"
+				class="info.astik.example.jaxws.server.ExampleWS"&gt;
+				&lt;property name="iExampleLogic" ref="iExampleLogic" /&gt;
+			&lt;/bean&gt;
+		</code>
+	</p>
+
+	<h2>Conclusion</h2>
+	<p>
+		Pour tester notre code, il suffit d'installer nos modules, pour cela placer vous dans le module parent "jaxws-server" :
+		<code class="block">
+			mvn install
+		</code>
+	</p>
+	<p>
+		Placer vous ensuite dans le module de l'application "jaxws-server-webapp" :
+		<code class="block">
+			mvn jetty:run
+		</code>
+	</p>
+	<p>
+		Enfin, dans un navigateur aller à l'adresse du <a href="http://localhost:8080/jaxws-server-webapp/services/example?wsdl">WSDL</a>, vous devriez voir le WSDL de votre service web.
+	</p>
+
+</body>
+</html>

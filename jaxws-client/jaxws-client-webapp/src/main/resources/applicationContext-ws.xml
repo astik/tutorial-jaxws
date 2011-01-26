@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+	<bean id="exampleWs"
+		class="org.springframework.remoting.jaxws.JaxWsPortProxyFactoryBean">
+		<property name="serviceInterface"
+			value="info.astik.example.jaxws.client.jaxws.ExampleWS" />
+		<property name="wsdlDocumentUrl" value="${webservice.example.wsdl.url}" />
+		<property name="namespaceUri" value="http://server.jaxws.example.astik.info/" />
+		<property name="serviceName" value="example" />
+		<property name="portName" value="examplePort" />
+	</bean>
+</beans>
+
+
+
+
